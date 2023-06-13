@@ -87,7 +87,7 @@
 
 순서는 `@RestController` → `@Controller` → `@Service` → `@Repository` 순으로 뜯어보자.
 
-뜯어보기 전, 우리는 어노테이션에 어노테이션을 등록할 수 있는 `meta-annotation` 개념을 알아야 한다. [meta-annotaion 포스팅](Spring/Spring Meta Annotation.md)
+뜯어보기 전, 우리는 어노테이션에 어노테이션을 등록할 수 있는 `meta-annotation` 개념을 알아야 한다. [meta-annotaion 포스팅](https://github.com/byeongJoo05/Memo/blob/c3303b101402a2f7d5c2a1f08cedbad639e5ff01/Spring/Spring%20Meta%20Annotation.md)
 
 ### @RestController
 
