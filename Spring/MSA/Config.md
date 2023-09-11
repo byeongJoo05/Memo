@@ -4,6 +4,18 @@
 
 - Spring Cloud Config는 설정파일을 외부(git 등)에서 관리하고 각 프로그램은 Spring Cloud Config Client(이하 Client)를 라이브러리에 포함시킨 뒤 Spring Cloud Config Server(이하 Server) 연결 정보를 기술하면 프로그램 시작 시 Spring Boot Application Properties 정보를 자동으로 읽어올 수 있다. 뿐만 아니라, `@RefreshScope`를 이용하면 변경된 설정 정보를 프로그램 재시작 없이 자동 반영할 수도 있다.
 
+### 왜 Spring Cloud Config를 사용해야 될까?
+
+특정 확률에 따라 광고를 내보내는 기능을 개발한다고 해보자. 그리고 확률 값이 변경될 때마다 수익이 어떻게 변하는지 확인해보는 A/B 테스트를 진행할 것이다. 처음엔 5%로 설정되었다가 테스트가 끝난 후엔 다시 10%로 바꿔야 한다. 확률 값을 프로젝트 설정 파일에서 읽어오거나 특정 변수에 대입하여 사용할 텐데 이런 경우 **값을 변경할 때마다 다시 빌드 후 배포하는 과정이 필요**하게 된다.
+
+이럴 때 **Spring Cloud Config**가 도움을 줄 수 있다. 분산된 환경에서 **설정 파일을 외부로 분리할 수 있도록** 해준다. 개발/테스트 환경 그리고 운영 환경에서까지 모든 환경 구성을 간편하게 관리할 수 있다. 설정을 위한 별도의 서버를 구성하기 때문에 실행 중인 애플리케이션이 서버에서 설정 정보를 받아와 갱신하는 방식이다. 즉 실행 중에 설정값 변경이 필요해지면, 설정 서버만 변경하고 애플리케이션은 갱신하도록 해주기만 하면 된다. 따라서 **설정이 바뀔 때마다 빌드와 배포가 필요 없는 구조**이다.
+
+## Spring Cloud Config의 기본 구조
+
+![2020-01-30-introduction-to-spring-cloud-config-1](https://github.com/byeongJoo05/Memo/assets/84984586/bd58cada-21df-407d-a3ca-9697ffbbddb9)
+
+- 먼저 클라이언트는 서버로 **설정값을 요청**하면 서버는 설정 파일이 위치한 **Git 저장소에 접근**한다. 서버는 Git 저장소로부터 최신 설정값을 받고 클라이언트는 다시 서버를 통해 **최신 설정값**을 받는다. 만일, **사용자가 설정 파일을 변경하고 Git 저장소를 업데이트했다면 애플리케이션(클라이언트)의 `actuator/refresh` 엔드 포인트를 호출하여 설정값을 변경**하도록 한다. 여기서의 설정값 갱신을 위한 엔드 포인트 호출은 각각의 클라이언트를 호출해야 하며 호출된 클라이언트만 반영된다.
+
 ## Spring Cloud Config Server
 
 - Server에서 git 등에 정의된 설정 정보를 읽어와 Client에 제공할 수 있다. 이 때 다수의 설정 정보를 체계적으로 제공하기 위해 URI의 형태에 따라 설정 파일을 구분할 수 있다. 가장 쉬운 방법은 Client의 `spring.application.name`와 `spring.profiles.active`를 이용해서 읽어올 설정 파일을 URI로 구분하는 방법이다.
@@ -34,7 +46,7 @@ eureka:
 
 그리고 저장소에서는 아래와 같이 설정 파일을 등록해서 Client가 사용할 수 있게 한다. 아래 이미지에서는 ribbon에서 사용할 설정 정보를 Spring Cloud Config를 이용해 가져올 수 있도록 설정한다.
 
-![Untitled](https://github.com/byeongJoo05/Memo/assets/84984586/3adc66bd-85ec-4d9d-8c96-83e42ef7cf62)
+![Untitled](https://github.com/byeongJoo05/Memo/assets/84984586/f06e56c7-644a-4576-b95d-90a6d404807e)
 
 ## Spring Cloud Config Client
 
@@ -52,6 +64,32 @@ spring:
   cloud:
     config:
       uri: <host>/config
+```
+
+### 애플리케이션 실행(구동) 시 처음 INFO로 나오는 Properties Mapping
+
+- ************************************************************************************************************Fetching config from server at : http://localhost:8888************************************************************************************************************
+    - 애플리케이션이 시작되며 Config Server로부터 설정 내용을 가져온다. 그리고 애플리케이션이 정상적으로 시작되었다면, 아래의 내용을 확인할 수 있을 것이다.
+- **Tomcat started on port(s): 9999 (http)**
+    - 설정 파일의 내용을 스프링 애플리케이션이 참조하여 해당 애플리케이션의 포트를 9999로 설정한 것이다.
+    - 스프링 부트의 특징 중 하나는 각종 설정의 오버라이드가 매우 쉽다는 점인데, 이것들은 서로 참조되는 순서가 있다.
+        - 첫번째로 참조되는 것이 바로 bootstart.properties로, 이 파일에 있는 내용은 애플리케이션의 이름, config server의 위치와 같이 거의 변경되지 않는 내용을 넣는다.
+        - 두번째로 참조되는 것이 이 경우에는 Config Server에 있는 설정 파일의 내용인데, 여기서 역시 참조 순서가 있다. Config Server가 참조하는 코드 저장소에 있는 설정 파일의 이름에 application.properties가 있다면, 여기에 있는 내용은 모든 Config Server를 참조하는 Config Client들이 참조하는 전역 설정과 같은 것이다. 그리고 이와 함께 `[application-name].properties`가 있다면, 이 **application.properties 위에 설정을 merge 해서 사용**한다. 이때 **동일한 설정이 있다면 이기는 쪽은 애플리케이션이름.프로퍼티 파일이 되겠다.**
+    - 이러한 우선 순위 규칙에 따라 애플리케이션 설정의 참조 순서를 적용할 수 있으며, 더욱 중요한 것은 이를 통해 설정과 코드를 분리할 수 있다는 것이다. 스프링부트 어플리케이션은 시작할 때 서버의 설정 내용을 참조하여 스스로 설정하며, 이는 12 factor 애플리케이션의 config 부분에 취급되는 매우 중요한 내용 중 하나가 되겠다.
+- 그리고 각 설정 파일을 환경 별로 생성할 필요 없이 사용될 환경을 지정해서 사용하는 것도 가능하다. 이는 `Profile` 이라고 불리는데, 위의 어플리케이션의 시작 로그를 살펴 보면 아래와 같은 로그가 남는 것을 확인할 수 있다.
+    - **************************No active profile set, falling back to default profiles: default**************************
+    - 따라서 사용하는 환경 별로 test, staging, prd와 같은 형태로 구성하여 사용할 수 있다.
+
+**예시**
+
+- `bootstrap.yml`에 실행할 `profile` 옵션을 넣었기에 아무런 설정없이 실행해도 된다. 실행하면서 직접 환경에 지정하고 싶은 경우는 `-Dspring.profiles.active=dev` 처럼 옵션을 넣어주면 된다.
+- Client가 구동될 때 시작 로그가 찍힌다면 다음과 같은 형태로 나오게 된다.
+
+```java
+Fetching config from server at : http://localhost:8088
+Located environment: name=config, profiles=[dev], label=null, version=760804e4ac41eee7a8d7cb14f42588b3ad7252fc, state=null
+Located property source: [BootstrapPropertySource {name='bootstrapProperties-configClient'},
+    BootstrapPropertySource {name='bootstrapProperties-https://github.com/madplay/spring-cloud-config-repository/config-dev.yml'}]
 ```
 
 ## Refresh Config
@@ -155,7 +193,7 @@ public class ServiceTestRestTemplateConfig {
 
 - Eureka Server는 `@EnableEurekaServer`를 이용하여 간단하게 설정할 수 있다. Spring Boot에 Eureka Server를 활성화하면 다음과 같이 상태를 조회할 수 있다.
 
-![Untitled 1](https://github.com/byeongJoo05/Memo/assets/84984586/c966ce6f-9bec-40b2-8594-e11045dba316)
+![Untitled 1](https://github.com/byeongJoo05/Memo/assets/84984586/de594766-eb45-462d-9b39-c6ea213afb26)
 
 - 기본적으로 Eureka Server는 ROOT(/) 경로에 위와 같이 모니터링을 할 수 있는 UI를 제공한다. 그리고 `/eureka/**` 경로에 필요한 Endpoint를 제공한다.
 
@@ -172,7 +210,7 @@ eureka:
 
 - 프로그램을 실행하면 다음과 같이 모니터링 페이지에 Client 가 등록되어 있는 것을 알 수 있다.
 
-![Untitled 2](https://github.com/byeongJoo05/Memo/assets/84984586/f8d795db-62c3-4dcb-9589-400c8b2c0248)
+![Untitled 2](https://github.com/byeongJoo05/Memo/assets/84984586/da108ea7-789d-4b62-b34f-5adaabfe08af)
 
 ## with Ribbon
 
